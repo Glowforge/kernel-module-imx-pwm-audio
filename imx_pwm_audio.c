@@ -1,6 +1,10 @@
 /**
  * i.MX PWM audio driver
- * Copyright (C) 2016-2018 Glowforge, Inc. <opensource@glowforge.com>
+ *
+ * Much of this code is adapted from the i.MX6 PWM driver.
+ * (drivers/pwm/pwm-imx.c)
+ *
+ * Copyright (C) 2016-2021 Glowforge, Inc. <opensource@glowforge.com>
  * Written by Matt Sarnoff.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -16,9 +20,6 @@
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Much of this code is adapted from the i.MX6 PWM driver.
- * (drivers/pwm/pwm-imx.c)
  */
 
 #include <linux/module.h>
@@ -61,8 +62,7 @@ static u32 sample_offset = 0;
 #define AUDIO_DEVICE_MINOR_NUMBER 128
 
 static const u32 sdma_script[] = {
-  0x0a000901, 0x69c80400, 0x69c86a2b, 0x620002df, 0x7d090568, 0x7d0b6209, 0x02a602bd, 0x6a2b0400,
-  0x01607df2, 0x03000400, 0x01607dee, 0x620a7df4
+#include "imx_pwm_audio_sdma.asm.h"
 };
 
 /* PWM Control Register */
@@ -159,6 +159,8 @@ static int load_sdma_script(struct imx_pwm_audio_data *self)
   struct sdma_context_data initial_context = {{0}};
 
   /* write the script code to SDMA RAM */
+  /* don't use sdma_load_script() because the assembler output */
+  /* is already in the correct endianness */
   dev_dbg(self->dev, "loading SDMA script (%d bytes)...", script_len);
   ret = sdma_write_datamem(self->sdma, (void *)script, script_len,
     self->sdma_script_origin);
@@ -545,7 +547,7 @@ static int imx_pwm_audio_probe(struct platform_device *pdev)
   platform_set_drvdata(pdev, self);
 
   /* Allocate contiguous memory for sample buffer */
-  self->sample_buf = dma_zalloc_coherent(&pdev->dev, SAMPLE_BUF_SIZE,
+  self->sample_buf = dma_alloc_coherent(&pdev->dev, SAMPLE_BUF_SIZE,
     &self->sample_buf_phys, GFP_KERNEL);
   if (!self->sample_buf) {
     dev_err(&pdev->dev, "failed to allocate sample buffer");
